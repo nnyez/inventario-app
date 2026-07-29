@@ -1,3 +1,12 @@
+# =============================================================================
+# Service canary — Instrucciones.html: Paso 6-8
+# =============================================================================
+# Mismo nombre que k8s/service.yaml, ambos se llaman "inventario-app".
+# Selector: app=inventario-app (sin track), por lo que matchea tanto pods
+#   estables como canary. El tráfico se distribuye proporcional a la cantidad
+#   de pods: 4 estables + 1 canary = ~80/20.
+# =============================================================================
+
 apiVersion: v1
 kind: Service
 metadata:

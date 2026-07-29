@@ -1,3 +1,11 @@
+# =============================================================================
+# ConfigMap — Variables de entorno compartidas
+# =============================================================================
+# Inyecta configuración a los pods sin necesidad de reconstruir la imagen.
+# STARTUP_DELAY_SECONDS: usado por server.js para retrasar /health (Comp. 3)
+# APP_VERSION / APP_COLOR: identifican la versión de la app
+# =============================================================================
+
 apiVersion: v1
 kind: ConfigMap
 metadata:

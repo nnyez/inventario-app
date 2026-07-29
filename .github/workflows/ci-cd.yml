@@ -1,3 +1,15 @@
+# =============================================================================
+# Pipeline CI/CD — Instrucciones.html: Paso 3, Componente 2 (Trivy)
+# =============================================================================
+# Dos jobs encadenados con "needs:" (fail-fast):
+#   1. build-test  → npm ci + npm test
+#   2. build-push  → solo si build-test pasó. Construye y publica imagen en
+#                    ghcr.io con tags: latest + sha-xxxxx.
+#   Además: escanea la imagen con Trivy (severity CRITICAL → pipeline falla).
+#
+# Permisos: packages:write necesario para publicar en GHCR.
+# =============================================================================
+
 name: CI/CD Pipeline
 
 on:

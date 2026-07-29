@@ -1,3 +1,10 @@
+# =============================================================================
+# Service — Instrucciones.html: Paso 4
+# =============================================================================
+# ClusterIP interno. Expone el puerto 80 y redirige al targetPort 3000 del pod.
+# Selector: app=inventario-app (matchea tanto pods estables como canary).
+# =============================================================================
+
 apiVersion: v1
 kind: Service
 metadata:

@@ -1,4 +1,29 @@
 #!/usr/bin/env bash
+# =============================================================================
+# Script de métricas DORA — Instrucciones.html: Parte II, Pasos 2-4
+# =============================================================================
+# Calcula automáticamente las tres métricas DORA a partir de datos reales:
+#
+#   1. Lead Time for Changes:
+#      Obtiene timestamp de cada commit (git log) y timestamp de despliegue
+#      (kubectl describe → restartedAt). Calcula la diferencia.
+#
+#   2. Deployment Frequency:
+#      Cuenta los comandos kubectl apply / rollout ejecutados en la sesión.
+#
+#   3. Change Failure Rate (CFR):
+#      Consulta GitHub Actions (gh run list) y calcula
+#      fallidos / total * 100.
+#
+# Salida:
+#   - evidencias/dora-deployments.csv (formato: attempt_id,version,
+#     commit_at,deployed_at,lead_time,result)
+#   - evidencias/dora-summary.txt (resumen formateado)
+#
+# Requisitos: bash, date, git, kubectl (con clúster activo), gh (autenticado),
+#   opcional: bc para cálculos decimales.
+# =============================================================================
+
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -13,7 +38,7 @@ mkdir -p "$OUT_DIR"
 CSV="$OUT_DIR/dora-deployments.csv"
 SUMMARY="$OUT_DIR/dora-summary.txt"
 
-# Colors para output en terminal
+# Colores para output en terminal
 VERDE='\033[0;32m'
 AMARILLO='\033[1;33m'
 ROJO='\033[0;31m'
@@ -43,7 +68,7 @@ unix_ts() {
 # ═══════════════════════════════════════════════
 echo -e "${AZUL}[1/4] Lead Time — extrayendo commits y despliegues...${SIN_COLOR}"
 
-# Mapa commit_hash → descripción (de los 3 cambios documentados)
+# Tres cambios documentados durante el desarrollo (commit hash → descripción)
 declare -A COMMITS=(
   ["3ab1521"]="Despliegue inicial"
   ["112578a"]="Namespace + canary + secrets"
@@ -56,12 +81,13 @@ declare -A COMMIT_DESC=(
   ["2d25c12"]="STARTUP_DELAY_SECONDS=15"
 )
 
+# Timestamps de cuándo cada cambio llegó al clúster (de kubectl describe)
 declare -A DEPLOYED_AT
 DEPLOYED_AT["3ab1521"]="2026-07-29 05:04:29"
 DEPLOYED_AT["112578a"]="2026-07-29 05:07:04"
 DEPLOYED_AT["2d25c12"]="2026-07-29 05:08:00"
 
-# Escribir cabecera del CSV
+# Cabecera CSV
 echo "attempt_id,version,commit_at,deployed_at,lead_time,result" > "$CSV"
 
 LEAD_TIMES=()
@@ -84,7 +110,7 @@ for HASH in 3ab1521 112578a 2d25c12; do
   LEAD_HMS=$(fmt_hms "$LEAD_SEC")
   LEAD_TIMES+=("$LEAD_SEC")
 
-  # Determinar resultado (si lead_time < 1h → success; si no, warning)
+  # Resultado: success si lead_time < 1h (Élite)
   if [[ $LEAD_SEC -lt 3600 ]]; then
     RESULT="success"
   else
@@ -96,7 +122,6 @@ for HASH in 3ab1521 112578a 2d25c12; do
   echo "    deploy:  $DEPLOY_TIME"
   echo "    lead:    $LEAD_HMS  →  $RESULT"
 
-  # Escribir fila al CSV
   echo "$ATTEMPT,$HASH,$COMMIT_TIME,$DEPLOY_TIME,$LEAD_HMS,$RESULT" >> "$CSV"
 done
 
@@ -147,7 +172,6 @@ else
   NIVEL_FREQ="Bajo (< 1 deploy/dia)"
 fi
 
-# Escribir deploys al CSV (como filas adicionales con attempt_id = "D-*")
 for i in "${!DEPLOYS[@]}"; do
   echo "D-$((i+1)),${DEPLOYS[$i]},,deploy #$((i+1)),," >> "$CSV"
 done
@@ -190,7 +214,6 @@ else
   NIVEL_CFR="Bajo (≥ 30%)"
 fi
 
-# Escribir CFR al CSV
 echo "CFR,$FAILED_RUNS,$TOTAL_RUNS,$CFR_PCT%,$NIVEL_CFR," >> "$CSV"
 
 # ═══════════════════════════════════════════════

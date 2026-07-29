@@ -1,3 +1,13 @@
+# =============================================================================
+# Canary — Deployment nuevo (20% tráfico) — Instrucciones.html: Paso 6-8
+# =============================================================================
+# 1 réplica de la nueva versión (v2/green).
+# APP_VERSION=v2 y APP_COLOR=green se inyectan directo, sobreescribiendo
+#   los valores del ConfigMap.
+# Como solo hay 1 réplica canary vs 4 estables, el Service envía ~20% del
+#   tráfico a este pod (ver README Paso 6.2).
+# =============================================================================
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:

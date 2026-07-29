@@ -1,3 +1,17 @@
+// =============================================================================
+// Tests — node:test
+// =============================================================================
+// 5 tests que verifican los endpoints principales:
+//   1. GET /health → 200 + status ok
+//   2. GET /version → 200 + version y color presentes
+//   3. POST + GET /api/products → creación y listado
+//   4. DELETE /api/products → eliminación
+//   5. POST inválido (sin name/sku) → 400
+//
+// Usa base de datos temporal (data/test-products.json) que se limpia al final.
+// Ejecutado por npm test tanto en local como dentro del Docker builder stage.
+// =============================================================================
+
 const { test, before, after } = require('node:test');
 const assert = require('node:assert');
 const http = require('node:http');

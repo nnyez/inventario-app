@@ -1,3 +1,13 @@
+# =============================================================================
+# Dockerfile multi-stage — Instrucciones.html: Paso 2
+# =============================================================================
+# Etapa 1: builder — instala dependencias y ejecuta npm test.
+#   El build FALLA si npm test falla (fail-fast).
+# Etapa 2: runtime — imagen mínima de producción.
+#   Copia solo lo necesario: node_modules, public/, server.js, db.js, data/.
+#   No incluye package-lock.json innecesarios, node_modules de dev, etc.
+# =============================================================================
+
 FROM node:18-alpine3.21 AS builder
 
 WORKDIR /app

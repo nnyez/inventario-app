@@ -1,3 +1,19 @@
+# =============================================================================
+# Deployment base — Instrucciones.html: Paso 4
+# =============================================================================
+# Estrategia: RollingUpdate con maxUnavailable=1, maxSurge=1.
+#   (un pod se reemplaza a la vez, sin downtime)
+# 2 réplicas mínimas.
+# ReadinessProbe: httpGet /health, initialDelaySeconds=5, periodSeconds=10,
+#   failureThreshold=6  → tolera hasta 60s sin marcar Ready.
+# LivenessProbe: httpGet /health, initialDelaySeconds=15, periodSeconds=20.
+#
+# Variables de entorno:
+#   - Desde ConfigMap (inventario-app-config): APP_VERSION, APP_COLOR,
+#     STARTUP_DELAY_SECONDS, PORT, SIMULATE_FAILURE
+#   - Desde Secret (inventario-app-secrets): API_KEY (Componente 1)
+# =============================================================================
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:

@@ -1,3 +1,12 @@
+# =============================================================================
+# Canary — Deployment estable (80% tráfico) — Instrucciones.html: Paso 6-8
+# =============================================================================
+# 4 réplicas de la versión actual (v1/blue).
+# Etiqueta "track: stable" para identificar este grupo.
+# El Service (k8s/canary/service.yaml) selecciona por app=inventario-app,
+#   por lo que balancea entre estables y canary según cantidad de pods.
+# =============================================================================
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:

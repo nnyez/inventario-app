@@ -1,3 +1,15 @@
+// =============================================================================
+// Base de datos JSON local — Persistencia explicada en Instrucciones.html: Paso 5
+// =============================================================================
+// Los datos se guardan en data/products.json dentro del contenedor.
+// Cuando un pod se elimina y Kubernetes lo recrea, el nuevo pod usa la imagen
+// original que contiene los seed iniciales → los datos creados por el usuario
+// se pierden.
+//
+// Esto NO es un error: es el comportamiento esperado de una base de datos
+// local sin volumen persistente (PVC) o base de datos externa.
+// =============================================================================
+
 const fs = require('fs');
 const path = require('path');
 

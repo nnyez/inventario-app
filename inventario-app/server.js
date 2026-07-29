@@ -1,3 +1,17 @@
+// =============================================================================
+// Servidor Express — API REST + interfaz web
+// Instrucciones.html: Componente 3 (STARTUP_DELAY_SECONDS)
+// =============================================================================
+// STARTUP_DELAY_SECONDS: hace que /health responda 503 durante los primeros
+//   N segundos después del arranque, simulando una app que tarda en conectar
+//   a una base de datos. El readinessProbe de Kubernetes debe tolerar este
+//   retraso (initialDelaySeconds + failureThreshold), de lo contrario el pod
+//   se mata y recrea en un ciclo infinito.
+//
+// APP_VERSION / APP_COLOR: usados por /version para identificar qué versión
+//   responde — permite verificar la distribución de tráfico en Canary.
+// =============================================================================
+
 const express = require('express');
 const path = require('path');
 const os = require('os');
@@ -14,6 +28,11 @@ function createApp() {
   app.use(express.json());
   app.use(express.static(path.join(__dirname, 'public')));
 
+  // /health: readiness + liveness probe target
+  // Responde:
+  //   - 503 si está en periodo de arranque (STARTUP_DELAY_SECONDS)
+  //   - 500 si fallo simulado o db no accesible
+  //   - 200 si todo ok
   app.get('/health', (req, res) => {
     if (SIMULATE_FAILURE || !db.canAccessDb()) {
       return res.status(500).json({ status: 'error', reason: 'fallo simulado o base de datos no accesible' });
@@ -28,6 +47,7 @@ function createApp() {
     res.status(200).json({ status: 'ok' });
   });
 
+  // /version: identifica versión, color y hostname del pod que responde
   app.get('/version', (req, res) => {
     res.status(200).json({
       version: APP_VERSION,
@@ -36,6 +56,7 @@ function createApp() {
     });
   });
 
+  // CRUD de productos (base de datos JSON local, ver db.js)
   app.get('/api/products', (req, res) => {
     res.status(200).json(db.getAll());
   });
