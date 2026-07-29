@@ -1,0 +1,10 @@
+attempt_id,version,commit_at,deployed_at,lead_time,result
+1,3ab1521,2026-07-29 04:23:30 -0500,2026-07-29 05:04:29,00:40:59,success
+2,112578a,2026-07-29 05:06:48 -0500,2026-07-29 05:07:04,00:00:16,success
+3,2d25c12,2026-07-29 05:07:51 -0500,2026-07-29 05:08:00,00:00:09,success
+D-1,kubectl apply -f k8s/,,deploy #1,,
+D-2,kubectl apply -f k8s/canary/,,deploy #2,,
+D-3,kubectl rollout restart stable,,deploy #3,,
+D-4,kubectl apply deployment-config.yaml,,deploy #4,,
+D-5,kubectl rollout restart canary,,deploy #5,,
+CFR,7,17,41.17%,Bajo (≥ 30%),

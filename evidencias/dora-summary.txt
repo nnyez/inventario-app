@@ -1,0 +1,25 @@
+==============================================
+  Métricas DORA - inventario-app
+  Repositorio: nnyez/inventario-app
+  Fecha: 2026-07-29
+  Generado: 2026-07-29 11:34:26
+==============================================
+
+1. Lead Time for Changes
+   Promedio: 00:13:48
+   Rango:    00:00:09 - 00:40:59
+   Nivel:    Elite (< 1 h)
+
+2. Deployment Frequency
+   Total deploys:  5
+   Dias:           1
+   Frecuencia:     5 deploys/dia
+   Nivel:          Elite (≥ 5 deploys/dia)
+
+3. Change Failure Rate
+   Total runs:     17
+   Fallidos:       7
+   CFR:            41.17%
+   Nivel:          Bajo (≥ 30%)
+
+==============================================
