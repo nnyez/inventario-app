@@ -8,6 +8,6 @@ metadata:
 data:
   APP_VERSION: "v1"
   APP_COLOR: "blue"
-  STARTUP_DELAY_SECONDS: "0"
+  STARTUP_DELAY_SECONDS: "15"
   PORT: "3000"
   SIMULATE_FAILURE: "false"

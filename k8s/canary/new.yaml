@@ -23,15 +23,14 @@ spec:
         image: ghcr.io/nnyez/inventario-app:latest
         ports:
         - containerPort: 3000
+        envFrom:
+        - configMapRef:
+            name: inventario-app-config
         env:
         - name: APP_VERSION
           value: "v2"
         - name: APP_COLOR
           value: "green"
-        - name: PORT
-          value: "3000"
-        - name: STARTUP_DELAY_SECONDS
-          value: "0"
         readinessProbe:
           httpGet:
             path: /health
