@@ -22,52 +22,56 @@
 
 \subsection*{1. Justificación de la estrategia Canary}
 
-Se eligió Canary sobre Blue-Green porque Kubernetes distribuye tráfico proporcional a la cantidad de pods que matchean el selector del Service. Con 4 réplicas estables (v1/blue) y 1 canary (v2/green), el $\sim80\%$ del tráfico va a la versión estable y $\sim20\%$ a la nueva. Canary requiere solo 5 pods frente a 8 de Blue-Green, es más eficiente para una aplicación liviana como \texttt{inventario-app}, y permite rollback inmediato escalando el canary a 0 réplicas. Además, permite aumentar gradualmente el porcentaje de tráfico a la nueva versión simplemente escalando el número de réplicas canary.
+Elegir Canary en lugar de Blue-Green se justifica por c\'omo Kubernetes distribuye el tr\'afico: el Service balancea entre todos los pods que coinciden con su selector, sin importar la versi\'on que ejecuten. Con cuatro r\'eplicas estables (v1/blue) y una canary (v2/green), aproximadamente el 80\,\% del tr\'afico llega a la versi\'on anterior y el 20\,\% a la nueva. Canary necesita solo cinco pods contra ocho de Blue-Green, lo que resulta m\'as eficiente para una aplicaci\'on ligera como \texttt{inventario-app}. Tambi\'en permite revertir el cambio escalando el canary a cero r\'eplicas, sin tocar el deployment estable.
 
-\subsection*{2. Observación sobre persistencia de datos}
+\subsection*{2. Observaci\'on sobre persistencia de datos}
 
-Se cre\'o un producto vía API (4 productos total) y se forz\'o la eliminaci\'on de un pod. Tras la recreaci\'on, el cat\'alogo conten\'ia solo 3 productos (los seed originales). Esto ocurre porque la base de datos es un archivo JSON local (\texttt{data/products.json}) en el filesystem ef\'imero del pod. No es un error, es el comportamiento esperado sin PVC o base de datos externa.
+Se agreg\'o un producto v\'ia POST (cuatro en total) y luego se elimin\'o un pod con \texttt{kubectl delete pod}. Kubernetes lo recre\'o de inmediato, pero el cat\'alogo mostraba otra vez solo los tres productos iniciales. La base de datos es un archivo JSON local (\texttt{data/products.json}) dentro del contenedor. Al usar la imagen original, el pod nuevo arranca con los datos de f\'abrica. No se trata de un error, sino del comportamiento esperado cuando no hay un volumen persistente o una base de datos externa compartida.
 
 \subsection*{3. Problemas reales encontrados}
 
 \small
 \begin{tabularx}{\textwidth}{p{3cm}p{3.5cm}X}
 \toprule
-\textbf{Problema} & \textbf{Causa} & \textbf{Solución} \\
+\textbf{Problema} & \textbf{Causa} & \textbf{Soluci\'on} \\
 \midrule
 Pipeline fallaba & \texttt{trivy-action@0.28.0} no existe & Cambiar a @v0.36.0 \\
-Build fallaba por caché & \texttt{cache-to=type=gha} incompatible & Eliminar caché \\
-Error ``denied: not allowed'' & GITHUB\_TOKEN sin packages:write & Agregar permissions \\
+Build fallaba por cach\'e & \texttt{cache-to=type=gha} incompatible & Eliminar configuraci\'on de cach\'e \\
+Error ``denied: not allowed'' & GITHUB\_TOKEN sin packages:write & Agregar permissions al workflow \\
 Trivy CRITICALs & node:18-alpine con CVE OpenSSL/tar & Alpine 3.21, apk upgrade \\
-Pods no arrancaban & Secret no exist\'ia & kubectl create secret \\
-Sin balanceo port-forward & port-forward no distribuye tráfico & Probar dentro del clúster \\
+Pods no arrancaban & Secret \texttt{inventario-app-secrets} no exist\'ia & \texttt{kubectl create secret} \\
+Sin balanceo en pruebas & \texttt{port-forward} no distribuye tr\'afico & Probar desde dentro del cl\'uster \\
 \bottomrule
 \end{tabularx}
 \normalsize
 
-\subsection*{4. Métricas DORA}
+\subsection*{4. M\'etricas DORA}
 
-Se calcularon con datos verificables de tres fuentes: \texttt{git log} (timestamp de commits), \texttt{gh run list} (timestamp de pipelines), y \texttt{kubectl describe deployment} (campo \texttt{restartedAt} para el momento exacto en que el cambio lleg\'o al cl\'uster).
+Los datos provienen de tres fuentes: \texttt{git log} (marca de tiempo del commit), \texttt{gh run list} (marca de tiempo del pipeline) y \texttt{kubectl describe deployment} (anotaci\'on \texttt{restartedAt}). Se consideraron los despliegues que efectivamente llegaron al cl\'uster.
 
 \small
 \begin{tabularx}{\textwidth}{Xcc}
 \toprule
-\textbf{Métrica} & \textbf{Valor} & \textbf{Nivel DORA} \\
+\textbf{M\'etrica} & \textbf{Valor} & \textbf{Nivel DORA} \\
 \midrule
-\textit{Lead Time} (commit $\rightarrow$ clúster): & 16 seg -- 41 min & \textbf{Élite} \\
-Despliegue inicial: \texttt{3ab1521} 04:23:30 $\rightarrow$ 05:04:29 & 41 min & ($<$1 h) \\
-Namespace+secrets: \texttt{112578a} 05:06:48 $\rightarrow$ 05:07:04 & 16 seg & \\
+\textit{Lead Time} (commit $\rightarrow$ cl\'uster) & 16 seg -- 41 min & \textbf{\'Elite} ($<$1 h) \\
+Despliegue inicial: \texttt{3ab1521} 04:23:30 $\rightarrow$ 05:04:29 & 41 min & \\
+Namespace + secrets: \texttt{112578a} 05:06:48 $\rightarrow$ 05:07:04 & 16 seg & \\
 STARTUP\_DELAY: \texttt{2d25c12} 05:07:51 $\rightarrow$ $\sim$05:08 & $\sim$1 min & \\
 \midrule
-\textit{Deployment Frequency}: cambios promovidos al clúster & 5 deploys/día & \textbf{Alto} \\
+\textit{Deployment Frequency} & 5 deploys/d\'ia & \textbf{Alto} \\
 \midrule
-\textit{Change Failure Rate}: pipelines fallidos / total & 7/14 = 50\% & \textbf{Bajo} \\
+\textit{Change Failure Rate} & 7/14 = 50\,\% & \textbf{Bajo} ($>$30\,\%) \\
 \bottomrule
 \end{tabularx}
 \normalsize
 
-\subsection*{5. Reflexión}
+\subsection*{5. Reflexi\'on}
 
-El CFR del 50\% refleja la etapa inicial de prueba y error (7 fallos por autenticación, versión incorrecta de acciones, caché de Docker y vulnerabilidades CRITICAL detectadas por Trivy). En un entorno maduro se espera reducirlo por debajo del 15\% (nivel Alto/Élite). El lead time \textbf{Élite} (16 segundos para cambios pequeños como configuración de namespace o STARTUP\_DELAY) demuestra que el pipeline entrega cambios casi instantáneamente cuando está estable. La frecuencia \textbf{Alta} (5 deploys/día) es propia de un desarrollo iterativo donde se experimenta y corrige sobre infraestructura real. En conjunto, las métricas confirman que las pr\'acticas implementadas (fail-fast entre jobs, escaneo de seguridad con Trivy, readiness probe tolerante al arranque lento, y manejo de secretos vía \texttt{secretKeyRef}) mejoran significativamente la calidad y confiabilidad del despliegue.
+El 50\,\% de tasa de fallo se explica por la etapa de montaje del proyecto. Siete de las catorce ejecuciones del pipeline fallaron por problemas de autenticaci\'on en GitHub Container Registry, una versi\'on incorrecta de Trivy Action, conflictos con la cach\'e de Docker y vulnerabilidades CRITICAL en la imagen base. Todos esos fallos ocurrieron en la primera hora de trabajo; una vez resueltos, los despliegues posteriores fueron limpios. En un entorno de producci\'on consolidado esta tasa deber\'ia estar por debajo del 15\,\%, pero en una pr\'actica de laboratorio la cifra refleja el aprendizaje m\'as que una deficiencia del proceso.
+
+El lead time m\'as bajo (16 segundos) se dio en cambios de configuraci\'on como la creaci\'on del namespace o el ajuste del STARTUP\_DELAY. Eso indica que el pipeline, cuando no encuentra obst\'aculos, entrega cambios casi en tiempo real. La frecuencia de cinco despliegues en un solo d\'ia es propia de un entorno de experimentaci\'on; en un proyecto real esa cadencia depender\'ia del ciclo de revisi\'on y del tama\~no del equipo.
+
+Las m\'etricas DORA no son fines en s\'i mismas. El valor de este ejercicio estuvo en ver c\'omo pr\'acticas concretas --separar el build en etapas, escanear vulnerabilidades antes de publicar, definir probes que respeten el tiempo de arranque de la aplicaci\'on, y mantener los secretos fuera del repositorio-- impactan directamente en la estabilidad de los despliegues. La parte canary, aunque simple, mostr\'o que es posible convivir dos versiones en el mismo cl\'uster sin romper el servicio.
 
 \end{document}
