@@ -9,7 +9,7 @@ RUN npm test
 FROM node:18-alpine3.21 AS runtime
 
 WORKDIR /app
-RUN apk --no-cache upgrade && addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
+RUN apk --no-cache upgrade && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx && addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 
 COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nodejs:nodejs /app/package*.json ./

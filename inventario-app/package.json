@@ -9,8 +9,5 @@
   },
   "dependencies": {
     "express": "^4.19.2"
-  },
-  "overrides": {
-    "tar": "7.5.22"
   }
 }
