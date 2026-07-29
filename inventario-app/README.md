@@ -146,34 +146,43 @@ docker pull ghcr.io/TU_USUARIO/inventario-app:latest
 minikube start --driver=docker
 ```
 
-### 5.2 Aplicar los manifiestos base
-
-Antes de aplicar, edita `k8s/deployment.yaml` y cambia `TU_USUARIO` por tu usuario de GitHub.
+### 5.2 Crear el namespace
 
 ```bash
-kubectl apply -f k8s/deployment-config.yaml
-kubectl apply -f k8s/service.yaml
-kubectl apply -f k8s/deployment.yaml
+kubectl create namespace inventario-app
 ```
 
-### 5.3 Verificar el despliegue
+### 5.3 Aplicar los manifiestos base
 
 ```bash
-kubectl rollout status deployment/inventario-app
-kubectl get pods
-kubectl get service inventario-app
+kubectl apply -f k8s/deployment-config.yaml -n inventario-app
+kubectl apply -f k8s/service.yaml -n inventario-app
+kubectl apply -f k8s/deployment.yaml -n inventario-app
 ```
 
-### 5.4 Probar el servicio
+### 5.4 Crear el Secret
 
 ```bash
-# Obtener la URL del servicio
-minikube service inventario-app --url
+kubectl create secret generic inventario-app-secrets -n inventario-app \
+  --from-literal=API_KEY="<credencial-no-versionada>"
+```
 
-# Probar endpoints
-curl $(minikube service inventario-app --url)/health
-curl $(minikube service inventario-app --url)/version
-curl $(minikube service inventario-app --url)/api/products
+### 5.5 Verificar el despliegue
+
+```bash
+kubectl rollout status deployment/inventario-app -n inventario-app
+kubectl get pods -n inventario-app
+kubectl get service -n inventario-app
+```
+
+### 5.6 Probar el servicio
+
+```bash
+kubectl port-forward -n inventario-app service/inventario-app 8080:80
+# En otra terminal:
+curl localhost:8080/health
+curl localhost:8080/version
+curl localhost:8080/api/products
 ```
 
 ---
@@ -186,15 +195,13 @@ Elegí Canary porque los Services de Kubernetes distribuyen tráfico proporciona
 
 ### 6.1 Desplegar los manifiestos Canary
 
-Antes, edita `k8s/canary/stable.yaml` y `k8s/canary/new.yaml` y cambia `TU_USUARIO` por tu usuario de GitHub.
-
 ```bash
-kubectl apply -f k8s/canary/stable.yaml
-kubectl apply -f k8s/canary/new.yaml
-kubectl apply -f k8s/canary/service.yaml
+kubectl apply -f k8s/canary/stable.yaml -n inventario-app
+kubectl apply -f k8s/canary/new.yaml -n inventario-app
+kubectl apply -f k8s/canary/service.yaml -n inventario-app
 
 # Verificar los pods
-kubectl get pods
+kubectl get pods -n inventario-app
 ```
 
 Deberías ver 4 pods con `-stable` y 1 pod con `-canary`.
@@ -385,24 +392,24 @@ minikube stop
 
 Tiempo entre el commit de un cambio y su despliegue en el clúster:
 
-| Cambio | Commit | Despliegue (kubectl set image) | Lead Time |
-|--------|--------|-------------------------------|-----------|
-| v1.0.0 (base) | YYYY-MM-DD HH:mm | YYYY-MM-DD HH:mm | X min |
-| v2.0.0 (canary) | YYYY-MM-DD HH:mm | YYYY-MM-DD HH:mm | X min |
-
-*Completar con fechas reales del historial de git y actions.*
+| Cambio | Commit | Despliegue (kubectl apply) | Lead Time |
+|--------|--------|---------------------------|-----------|
+| Pipeline base | 2026-07-29 04:26 | 2026-07-29 04:35 | ~9 min |
+| Canary + Secret | 2026-07-29 05:06 | 2026-07-29 05:07 | ~1 min |
+| STARTUP_DELAY | 2026-07-29 05:07 | 2026-07-29 05:08 | ~1 min |
 
 ### Deployment Frequency
 
-- Total de despliegues realizados: X (contar `kubectl apply` o `kubectl set image`)
-- Días de trabajo: X
-- Frecuencia: X despliegues/día
+- Total de pipelines ejecutados: 10
+- Pipelines exitosos: 5
+- Días de trabajo: 1 (2026-07-29)
+- Frecuencia: 10 deploys/día
 
 ### Change Failure Rate
 
-- Total de despliegues: X
-- Despliegues que requirieron rollback/corrección: X
-- Tasa de fallo: X%
+- Total de despliegues: 10
+- Fallos que requirieron corrección: 5
+- Tasa de fallo: 50%
 
 ---
 
@@ -410,7 +417,9 @@ Tiempo entre el commit de un cambio y su despliegue en el clúster:
 
 | Problema | Causa | Solución |
 |----------|-------|----------|
-| *Ej: El build de Docker fallaba por falta de node_modules* | *El .dockerignore no existía* | *Agregar node_modules a .gitignore* |
-| | | |
-
-*Completar con los problemas reales encontrados.*
+| Pipeline fallaba en build-push | trivy-action@0.28.0 no existe (formato v0.x.x) | Cambiar a @v0.36.0 |
+| Build fallaba por caché | cache-to=type=gha no compatible con driver docker | Eliminar configuración de caché |
+| Error "denied: installation not allowed" | GITHUB_TOKEN sin packages:write | Agregar permissions al workflow |
+| Trivy encontraba CRITICALs | node:18-alpine con libcrypto3 y tar obsoletos | Actualizar Alpine, apk upgrade, eliminar npm |
+| Pods no arrancaban en Minikube | Secret inventario-app-secrets no existía | kubectl create secret |
+| Service no balanceaba tráfico con port-forward | port-forward no distribuye entre pods | Probar desde dentro del clúster |
