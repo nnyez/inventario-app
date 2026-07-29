@@ -164,7 +164,7 @@ Se creó un Secret de Kubernetes con una \texttt{API\_KEY} ficticia:
 
 \begin{lstlisting}
 kubectl create secret generic inventario-app-secrets -n inventario-app \
-  --from-literal=API_KEY="sk-test-1234567890"
+  --from-literal=API_KEY="<credencial-no-versionada>"
 \end{lstlisting}
 
 El \texttt{deployment.yaml} lo consume vía \texttt{secretKeyRef}:
