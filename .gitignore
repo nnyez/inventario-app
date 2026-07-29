@@ -4,3 +4,5 @@ npm-debug.log
 data/products.json
 data/test-products.json
 *.log
+
+latex
