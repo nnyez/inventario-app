@@ -111,7 +111,7 @@ docker stop inventario && docker rm inventario
 [{"id":1,"name":"Laptop","sku":"LAP-001","stock":10,"price":899.99},...]
 ```
 
-![Build Docker local](img/01.png)
+![Build Docker local](inventario-app/img/01.png)
 
 ---
 
@@ -165,9 +165,9 @@ Para verificar desde tu máquina:
 docker pull ghcr.io/TU_USUARIO/inventario-app:latest
 ```
 
-![Pipeline CI/CD en Actions](img/02.png)
+![Pipeline CI/CD en Actions](inventario-app/img/02.png)
 
-![Imagen en ghcr.io](img/03.png)
+![Imagen en ghcr.io](inventario-app/img/03.png)
 
 ---
 
@@ -237,9 +237,9 @@ curl localhost:8080/api/products
 [{"id":1,"name":"Laptop","sku":"LAP-001",...}]
 ```
 
-![Pods en Minikube](img/04.png)
+![Pods en Minikube](inventario-app/img/04.png)
 
-![Endpoints funcionando](img/05.png)
+![Endpoints funcionando](inventario-app/img/05.png)
 
 ---
 
@@ -290,7 +290,7 @@ blue (v1, host: inventario-app-stable-...)
 ...
 ```
 
-![Tráfico canary](img/06.png)
+![Tráfico canary](inventario-app/img/06.png)
 
 ---
 
@@ -332,7 +332,7 @@ curl -s $(minikube service inventario-app --url)/api/products | jq '. | length'
 
 **Observación:** El producto creado ya no existe. Esto ocurre porque la base de datos es un archivo JSON local (`data/products.json`) dentro del pod. Al recrearse el pod, Kubernetes usa la imagen original que contiene los datos iniciales. **No es un error** — es el comportamiento esperado de una base de datos local sin persistencia externa (volumen, PVC, o base de datos externa).
 
-![Persistencia de datos](img/08.png)
+![Persistencia de datos](inventario-app/img/08.png)
 
 ---
 
@@ -453,7 +453,7 @@ docker stop inventario-delay && docker rm inventario-delay
 
 **¿Qué pasaría si en vez de ajustar el probe simplemente se aumenta el número de réplicas?** Aumentar réplicas no resolvería el problema: cada nuevo pod individualmente tardaría en arrancar, y sin un `readinessProbe` tolerante, Kubernetes mataría y recrearía el pod en un ciclo infinito porque el pod nunca se marca como "Ready" a tiempo. Ajustar el `initialDelaySeconds` o `failureThreshold` del probe es la solución correcta.
 
-![Secret y readiness probe](img/07.png)
+![Secret y readiness probe](inventario-app/img/07.png)
 
 ---
 
@@ -552,7 +552,7 @@ Tiempo entre el commit de un cambio y el momento en que ese cambio quedó corrie
 >
 > Se incluyen los despliegues de prueba y error mientras se armaba la estrategia. Los 7 fallos corresponden a errores de autenticación en GitHub Container Registry, versión incorrecta de Trivy Action, conflictos con la caché de Docker y vulnerabilidades CRITICAL en la imagen base.
 
-![Git log para métricas DORA](img/09.png)
+![Git log para métricas DORA](inventario-app/img/09.png)
 
 ---
 
