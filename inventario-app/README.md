@@ -45,12 +45,32 @@ npm test          # deben pasar los 5 tests
 npm start         # servidor en http://localhost:3000
 ```
 
+**Salida esperada de `npm test`:**
+```
+▶ node:test test suite
+  ✔ /health returns 200
+  ✔ /version returns v1/blue
+  ✔ /api/products returns list
+  ✔ POST /api/products creates product
+  ✔ / returns HTML interface
+  ℹ tests 5
+  ✔ pass 5
+  ℹ duration ...
+```
+
 En otra terminal:
 
 ```bash
-curl http://localhost:3000/health       # → {"status":"ok"}
-curl http://localhost:3000/version      # → {"version":"v1","color":"blue",...}
-curl http://localhost:3000/api/products # → lista de productos
+curl http://localhost:3000/health
+curl http://localhost:3000/version
+curl http://localhost:3000/api/products
+```
+
+**Salida esperada:**
+```json
+{"status":"ok"}
+{"version":"v1","color":"blue","hostname":"..."}
+[{"id":1,"name":"Laptop","sku":"LAP-001",...},...]
 ```
 
 Detén el servidor con Ctrl+C.
@@ -83,6 +103,15 @@ curl -X POST http://localhost:3000/api/products \
 # Detener y limpiar
 docker stop inventario && docker rm inventario
 ```
+
+**Salida esperada de endpoints:**
+```json
+{"status":"ok"}
+{"version":"v1","color":"blue","hostname":"..."}
+[{"id":1,"name":"Laptop","sku":"LAP-001","stock":10,"price":899.99},...]
+```
+
+![Build Docker local](img/01.png)
 
 ---
 
@@ -136,6 +165,10 @@ Para verificar desde tu máquina:
 docker pull ghcr.io/TU_USUARIO/inventario-app:latest
 ```
 
+![Pipeline CI/CD en Actions](img/02.png)
+
+![Imagen en ghcr.io](img/03.png)
+
 ---
 
 ## Paso 5: Desplegar en Minikube
@@ -175,6 +208,18 @@ kubectl get pods -n inventario-app
 kubectl get service -n inventario-app
 ```
 
+**Salida esperada:**
+```
+deployment "inventario-app" successfully rolled out
+
+NAME                               READY   STATUS    RESTARTS   AGE
+inventario-app-xxxxxxxx-yyyy       1/1     Running   0          30s
+inventario-app-xxxxxxxx-zzzz       1/1     Running   0          30s
+
+NAME              TYPE        CLUSTER-IP      PORT(S)   AGE
+inventario-app    ClusterIP   10.96.x.x       80/TCP    30s
+```
+
 ### 5.6 Probar el servicio
 
 ```bash
@@ -184,6 +229,17 @@ curl localhost:8080/health
 curl localhost:8080/version
 curl localhost:8080/api/products
 ```
+
+**Salida esperada:**
+```json
+{"status":"ok"}
+{"version":"v1","color":"blue","hostname":"inventario-app-xxxxxxxx-yyyy"}
+[{"id":1,"name":"Laptop","sku":"LAP-001",...}]
+```
+
+![Pods en Minikube](img/04.png)
+
+![Endpoints funcionando](img/05.png)
 
 ---
 
@@ -204,7 +260,15 @@ kubectl apply -f k8s/canary/service.yaml -n inventario-app
 kubectl get pods -n inventario-app
 ```
 
-Deberías ver 4 pods con `-stable` y 1 pod con `-canary`.
+**Salida esperada (5 pods: 4 stable + 1 canary):**
+```
+NAME                                         READY   STATUS    RESTARTS   AGE
+inventario-app-stable-xxxxxxxx-yyyy          1/1     Running   0          10s
+inventario-app-stable-xxxxxxxx-zzzz          1/1     Running   0          10s
+inventario-app-stable-xxxxxxxx-wwww          1/1     Running   0          10s
+inventario-app-stable-xxxxxxxx-vvvv          1/1     Running   0          10s
+inventario-app-canary-xxxxxxxx-uuuu          1/1     Running   0          10s
+```
 
 ### 6.2 Probar la distribución de tráfico
 
@@ -217,7 +281,16 @@ for i in $(seq 1 20); do
 done
 ```
 
-Resultado esperado: ~4 respuestas de color "green" (v2, canary) y ~16 de color "blue" (v1, stable).
+**Salida esperada (~16 blue + ~4 green):**
+```
+blue (v1, host: inventario-app-stable-...)
+blue (v1, host: inventario-app-stable-...)
+green (v2, host: inventario-app-canary-...)
+blue (v1, host: inventario-app-stable-...)
+...
+```
+
+![Tráfico canary](img/06.png)
 
 ---
 
@@ -234,11 +307,19 @@ curl -X POST $(minikube service inventario-app --url)/api/products \
 ### 7.2 Eliminar un pod y observar qué pasa
 
 ```bash
-# Eliminar un pod del deployment base
-kubectl delete pod -l app=inventario-app --field-selector status.phase=Running --limit=1
+POD=$(kubectl get pod -n inventario-app -l app=inventario-app -o name | head -1)
+echo "$POD eliminado"
+kubectl delete -n inventario-app "$POD"
+kubectl get pods -n inventario-app -w
+```
 
-# Esperar a que el nuevo pod esté listo
-kubectl get pods --watch
+**Salida esperada (el pod se recrea automáticamente):**
+```
+pod "inventario-app-xxxxxxxx-yyyy" deleted
+NAME                               READY   STATUS        RESTARTS   AGE
+inventario-app-xxxxxxxx-yyyy       1/1     Terminating   0          5m
+inventario-app-xxxxxxxx-zzzz       1/1     Running       0          5m
+inventario-app-xxxxxxxx-wwww       0/1     Running       0          3s
 ```
 
 ### 7.3 Verificar los datos
@@ -247,7 +328,11 @@ kubectl get pods --watch
 curl -s $(minikube service inventario-app --url)/api/products | jq '. | length'
 ```
 
+**Salida esperada: `3`** (el producto creado se perdió; solo quedan los 3 seed originales).
+
 **Observación:** El producto creado ya no existe. Esto ocurre porque la base de datos es un archivo JSON local (`data/products.json`) dentro del pod. Al recrearse el pod, Kubernetes usa la imagen original que contiene los datos iniciales. **No es un error** — es el comportamiento esperado de una base de datos local sin persistencia externa (volumen, PVC, o base de datos externa).
+
+![Persistencia de datos](img/08.png)
 
 ---
 
@@ -368,6 +453,8 @@ docker stop inventario-delay && docker rm inventario-delay
 
 **¿Qué pasaría si en vez de ajustar el probe simplemente se aumenta el número de réplicas?** Aumentar réplicas no resolvería el problema: cada nuevo pod individualmente tardaría en arrancar, y sin un `readinessProbe` tolerante, Kubernetes mataría y recrearía el pod en un ciclo infinito porque el pod nunca se marca como "Ready" a tiempo. Ajustar el `initialDelaySeconds` o `failureThreshold` del probe es la solución correcta.
 
+![Secret y readiness probe](img/07.png)
+
 ---
 
 ## Paso 10: Limpieza
@@ -390,26 +477,82 @@ minikube stop
 
 ### Lead Time for Changes
 
-Tiempo entre el commit de un cambio y su despliegue en el clúster:
+Tiempo entre el commit de un cambio y el momento en que ese cambio quedó corriendo en el clúster:
 
-| Cambio | Commit | Despliegue (kubectl apply) | Lead Time |
+| Cambio | Commit | En clúster (kubectl apply) | Lead Time |
 |--------|--------|---------------------------|-----------|
-| Pipeline base | 2026-07-29 04:26 | 2026-07-29 04:35 | ~9 min |
-| Canary + Secret | 2026-07-29 05:06 | 2026-07-29 05:07 | ~1 min |
-| STARTUP_DELAY | 2026-07-29 05:07 | 2026-07-29 05:08 | ~1 min |
+| Despliegue inicial de la app | `3ab1521` 2026-07-29 04:23:30 | Deployments creados 2026-07-29 05:04:29 | **41 min** |
+| Namespace + canary + secrets | `112578a` 2026-07-29 05:06:48 | Rollout restart 2026-07-29 05:07:04 | **16 seg** |
+| STARTUP_DELAY_SECONDS=15 | `2d25c12` 2026-07-29 05:07:51 | `kubectl apply` ~05:08 | **~1 min** |
+
+> **Cómo se calculó:** El script `scripts/calcular-metricas-dora.sh` automatiza la extracción. Internamente ejecuta estos comandos:
+>
+> ```bash
+> # Timestamp del commit
+> git log --format="%h | %ci | %s"
+>
+> # Timestamp de despliegue (restartedAt en las anotaciones del deployment)
+> kubectl describe deployment -n inventario-app | grep -E "Revision|restartedAt"
+>
+> # Lead time = deployed_at - commit_at
+> # se resta con date -d para cada par commit/deploy
+> ```
+>
+> Para el despliegue inicial se usó `creationTimestamp` del Deployment; para cambios posteriores, la anotación `restartedAt` del rollout.
 
 ### Deployment Frequency
 
-- Total de pipelines ejecutados: 10
-- Pipelines exitosos: 5
-- Días de trabajo: 1 (2026-07-29)
-- Frecuencia: 10 deploys/día
+- **Total de cambios promovidos al clúster (kubectl apply/rollout):** 5
+   1. `kubectl apply -f k8s/` (despliegue inicial)
+   2. `kubectl apply -f k8s/canary/` (canary + namespace)
+   3. `kubectl rollout restart stable` (namespace fix)
+   4. `kubectl apply` deployment-config.yaml (STARTUP_DELAY)
+   5. `kubectl rollout restart canary` (pruebas)
+- **Días de trabajo:** 1 (2026-07-29)
+- **Frecuencia:** 5 deploys/día
+
+> **Cómo se calculó:** El script `scripts/calcular-metricas-dora.sh` extrae las revisiones del deployment:
+>
+> ```bash
+> kubectl rollout history deployment/inventario-app -n inventario-app
+> kubectl describe deployment inventario-app -n inventario-app \
+>   | grep -E "Revision|Change-Cause|restartedAt"
+> kubectl describe deployment inventario-app-canary -n inventario-app \
+>   | grep -E "Revision|restartedAt"
+> ```
+>
+> Se contaron las revisiones únicas y los comandos `kubectl apply` / `kubectl rollout restart` ejecutados durante la sesión de trabajo.
 
 ### Change Failure Rate
 
-- Total de despliegues: 10
-- Fallos que requirieron corrección: 5
-- Tasa de fallo: 50%
+- **Total de pipelines ejecutados (deployment attempts):** 14
+- **Fallos que requirieron corrección:** 7
+- **Tasa de fallo:** 50%
+
+| Conclusión | Cantidad |
+|------------|----------|
+| ✅ Exitosos | 7 |
+| ❌ Fallos | 7 |
+| **CFR** | **50%** |
+
+> **Cómo se calculó:** `scripts/calcular-metricas-dora.sh` ejecuta estos comandos de la GitHub CLI:
+>
+> ```bash
+> # Total de runs del día
+> gh run list --repo nnyez/inventario-app --created "2026-07-29" \
+>   --json databaseId | jq 'length'
+>
+> # Runs fallidos (conclusion != "success")
+> gh run list --repo nnyez/inventario-app --created "2026-07-29" \
+>   --json conclusion \
+>   --jq '[.[] | select(.conclusion != "success")] | length'
+>
+> # CFR = fallidos / total * 100
+> ```
+>
+> Se incluyen los despliegues de prueba y error mientras se armaba la estrategia. Los 7 fallos corresponden a errores de autenticación en GitHub Container Registry, versión incorrecta de Trivy Action, conflictos con la caché de Docker y vulnerabilidades CRITICAL en la imagen base.
+
+![Git log para métricas DORA](img/09.png)
 
 ---
 
