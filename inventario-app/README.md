@@ -316,7 +316,7 @@ Creamos un Secret de Kubernetes con una API_KEY ficticia y lo consumimos desde e
 ```bash
 # Crear el Secret (NUNCA versionar este comando en Git)
 kubectl create secret generic inventario-app-secrets \
-  --from-literal=API_KEY="sk-test-1234567890"
+  --from-literal=API_KEY="<credencial-no-versionada>"
 
 # Verificar que el Deployment lo está usando
 kubectl get deployment inventario-app -o yaml | grep -A5 secretKeyRef

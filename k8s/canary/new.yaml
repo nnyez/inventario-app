@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: inventario-app-canary
+  namespace: inventario-app
   labels:
     app: inventario-app
     track: canary
@@ -19,7 +20,7 @@ spec:
     spec:
       containers:
       - name: inventario-app
-        image: ghcr.io/TU_USUARIO/inventario-app:v2
+        image: ghcr.io/nnyez/inventario-app:latest
         ports:
         - containerPort: 3000
         env:

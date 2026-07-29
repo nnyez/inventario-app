@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: inventario-app-stable
+  namespace: inventario-app
   labels:
     app: inventario-app
     track: stable
@@ -19,7 +20,7 @@ spec:
     spec:
       containers:
       - name: inventario-app
-        image: ghcr.io/TU_USUARIO/inventario-app:latest
+        image: ghcr.io/nnyez/inventario-app:latest
         ports:
         - containerPort: 3000
         envFrom:

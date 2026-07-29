@@ -228,7 +228,7 @@ El `deployment.yaml` ya incluye `secretKeyRef` para `API_KEY`. Solo falta crear 
 
 ```bash
 kubectl create secret generic inventario-app-secrets \
-  --from-literal=API_KEY="sk-test-1234567890"
+  --from-literal=API_KEY="<credencial-no-versionada>"
 ```
 
 **Verificar:**
