@@ -1,4 +1,4 @@
-FROM node:18-alpine AS builder
+FROM node:18-alpine3.21 AS builder
 
 WORKDIR /app
 COPY package*.json ./
@@ -6,10 +6,10 @@ RUN npm ci
 COPY . .
 RUN npm test
 
-FROM node:18-alpine AS runtime
+FROM node:18-alpine3.21 AS runtime
 
 WORKDIR /app
-RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
+RUN apk --no-cache upgrade && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx && addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 
 COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nodejs:nodejs /app/package*.json ./
