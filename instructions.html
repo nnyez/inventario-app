@@ -1,0 +1,595 @@
+<span class="notifications" id="user-notifications"></span>
+<span id="maincontent"></span>
+<div
+  class="activity-header"
+  data-for="page-activity-header"
+  id="yui_3_18_1_1_1785253912110_120"
+>
+  <span class="sr-only">Requisitos de finalización</span>
+  <div
+    data-region="activity-information"
+    data-activityname="Examen Final - Parte 1 (Practica CI/CD)"
+    class="activity-information"
+  >
+    <div data-region="activity-dates" class="activity-dates">
+      <div><strong>Apertura:</strong> lunes, 20 de julio de 2026, 00:00</div>
+      <div><strong>Cierre:</strong> lunes, 27 de julio de 2026, 00:00</div>
+    </div>
+  </div>
+  <div class="activity-description" id="intro">
+    <div
+      class="box py-3 generalbox boxaligncenter"
+      id="yui_3_18_1_1_1785253912110_119"
+    >
+      <div class="no-overflow">
+        <p><strong>Modalidad:</strong> En parejas</p>
+        <hr />
+        <h3>Contexto General</h3>
+        <p>
+          Un pipeline de CI/CD que solo compila y despliega resuelve apenas la
+          mitad del problema: falta desplegar sin arriesgar a los usuarios
+          reales, adaptarse a picos de tráfico sin intervención humana, y poder
+          medir objetivamente el propio desempeño. Esta tarea parte de
+          <code>inventario-app</code> —interfaz web, API REST y base de datos
+          local, la cual será empleada para simular un entorno de CI/CD, como
+          parte de una practica de laboratorio.
+        </p>
+        <hr />
+        <h3>Parte I — Construcción y Despliegue</h3>
+        <p>
+          <strong>Objetivo</strong><br />Partiendo del repositorio
+          <code>inventario-app</code> (interfaz web, API REST y base de datos
+          local ya funcionando, construir y desplegar todo el pipeline:
+          empaquetado en Docker, publicación automática vía GitHub Actions,
+          despliegue base con rolling update, una segunda estrategia de
+          despliegue (Blue-Green o Canary), y al menos dos componentes
+          adicionales de buenas prácticas (manejo de secretos, escaneo de
+          seguridad en CI, o readiness con arranque lento).
+        </p>
+        <p>
+          <strong
+            >Instrucciones — pipeline base (Docker, CI/CD, Kubernetes)</strong
+          >
+        </p>
+        <p>
+          <strong>Paso 1.</strong> Tome el repositorio
+          <code>inventario-app</code> como punto de partida y verifique que
+          corre en local.
+        </p>
+        <p>
+          <strong>Paso 2.</strong> Escriba un
+          <code>Dockerfile</code> multi-stage: una etapa que instale
+          dependencias y ejecute <code>npm test</code> (el build debe fallar si
+          las pruebas fallan), y una etapa final mínima que copie solo lo
+          necesario para ejecutar la app — incluida la carpeta
+          <code>public/</code> de la interfaz. Construya la imagen y pruébela en
+          local con <code>docker build</code> / <code>docker run</code>,
+          verificando con <code>curl</code> las rutas <code>/</code>,
+          <code>/health</code>, <code>/version</code> y
+          <code>/api/products</code>.
+        </p>
+        <p>
+          <strong>Paso 3.</strong> Cree un repositorio en GitHub (público) para
+          su copia de <code>inventario-app</code> y escriba
+          <code>.github/workflows/ci-cd.yml</code> con dos jobs encadenados:
+          <code>build-test</code> (<code>npm ci</code> + <code>npm test</code>)
+          y <code>build-push</code> (<code>needs: build-test</code>, publica la
+          imagen en <code>ghcr.io</code> etiquetada con el hash del commit y con
+          <code>latest</code>). Haga <code>push</code> y confirme en la pestaña
+          <strong>Actions</strong> que el pipeline corre exitosamente y publica
+          la imagen.
+        </p>
+        <p>
+          <strong>Paso 4.</strong> Escriba
+          <code>k8s/deployment.yaml</code> (mínimo 2 réplicas,
+          <code>strategy: RollingUpdate</code> con
+          <code>maxUnavailable</code>/<code>maxSurge</code> en 1, y
+          <code>readinessProbe</code>/<code>livenessProbe</code> apuntando a
+          <code>/health</code>) y <code>k8s/service.yaml</code>. Despliegue
+          sobre Minikube y confirme con <code>kubectl rollout status</code> y
+          <code>curl</code> que el servicio responde correctamente.
+        </p>
+        <p>
+          <strong>Paso 5.</strong> Cree un producto desde la interfaz, y luego
+          fuerce la eliminación y recreación del pod (por ejemplo con
+          <code>kubectl delete pod</code> sobre uno de los pods del Deployment).
+          Observe qué ocurre con el producto que había creado — es una
+          consecuencia directa de cómo se armó la base de datos local de esta
+          aplicación, no un error a corregir en esta tarea, pero debe quedar
+          registrado en el informe de la Parte II.
+        </p>
+        <p>
+          <strong
+            >Instrucciones — segunda estrategia de despliegue (Blue-Green o
+            Canary)</strong
+          >
+        </p>
+        <p>
+          <strong>Paso 6.</strong> Repase la diferencia conceptual entre ambas
+          estrategias (glosario de su README de la práctica y documento
+          complementario de la clase), identifique qué recursos nativos de
+          Kubernetes permitirían implementar cada una sobre su Deployment actual
+          sin herramientas adicionales como Argo Rollouts, y elija una:
+        </p>
+        <ol start="1">
+          <li>
+            <p>
+              <strong>Blue-Green:</strong> dos Deployments independientes (por
+              ejemplo <code>inventario-app-blue</code> y
+              <code>inventario-app-green</code>), cada uno con su propia versión
+              de la app, y un Service cuyo selector se puede cambiar de uno a
+              otro para cortar el tráfico de forma instantánea.
+            </p>
+          </li>
+          <li>
+            <p>
+              <strong>Canary:</strong> dos Deployments con la misma app en
+              distintas versiones, repartiendo el tráfico de forma desigual
+              entre ellos aprovechando que un Service reparte tráfico de forma
+              proporcional a la cantidad de pods que matchean su selector (por
+              ejemplo, 1 réplica de la versión nueva contra 4 de la versión
+              estable).
+            </p>
+          </li>
+        </ol>
+        <p>
+          <strong>Paso 7.</strong> Implemente los manifiestos YAML de la
+          estrategia elegida dentro de una carpeta
+          <code>k8s/blue-green/</code> o <code>k8s/canary/</code> en su
+          repositorio, según corresponda.
+        </p>
+        <p>
+          <strong>Paso 8.</strong> Si eligió Blue-Green, demuestre el corte de
+          tráfico con evidencia de <code>kubectl</code> y
+          <code>curl</code> antes y después de cambiar el selector del Service.
+          Si eligió Canary, demuestre con varias peticiones repetidas que solo
+          una fracción del tráfico llega a la versión nueva.
+        </p>
+        <p>
+          <strong
+            >Instrucciones — componentes adicionales de buenas prácticas</strong
+          >
+        </p>
+        <p>
+          De los tres componentes siguientes, debe implementar
+          <strong>al menos dos</strong> — son parte obligatoria de la tarea,
+          cada pareja elige cuáles dos. Si implementa los <strong>tres</strong>,
+          el que quede de más (cualquiera de los tres) suma puntos extra (+2 al
+          examen).
+        </p>
+        <ol start="1">
+          <li>
+            <p>
+              <strong>Manejo de secretos:</strong> cree un Secret de Kubernetes
+              para una credencial ficticia (por ejemplo, una
+              <code>API_KEY</code> inventada) y consúmala desde la aplicación
+              vía variable de entorno con <code>secretKeyRef</code>, en vez de
+              tenerla en texto plano en el Deployment. Debe demostrarse que esa
+              credencial nunca queda escrita en ningún archivo versionado en
+              Git.
+            </p>
+          </li>
+          <li>
+            <p>
+              <strong>Escaneo de seguridad en el pipeline:</strong> agregue un
+              paso al workflow de GitHub Actions que escanee la imagen
+              construida con Trivy (u otra acción equivalente) antes de
+              publicarla, y configure el paso para que el pipeline falle si
+              encuentra vulnerabilidades de severidad CRITICAL.
+            </p>
+          </li>
+          <li>
+            <p>
+              <strong>Readiness realista con arranque lento:</strong> agregue
+              una variable <code>STARTUP_DELAY_SECONDS</code> que haga que
+              <code>/health</code> responda "no listo" durante los primeros N
+              segundos después de arrancar (simulando una app que tarda en
+              conectar a una base de datos). Ajuste el
+              <code>readinessProbe</code> para tolerar ese arranque sin que
+              Kubernetes elimine el pod, y documente qué pasaría si en vez de
+              ajustar el probe simplemente se aumentara el número de réplicas.
+            </p>
+          </li>
+        </ol>
+        <p><strong>Restricciones</strong></p>
+        <ul>
+          <li>
+            El <code>Dockerfile</code> debe ser multi-stage y debe fallar el
+            build si <code>npm test</code> falla.
+          </li>
+          <li>
+            El workflow debe seguir el principio fail-fast:
+            <code>build-push</code> solo se ejecuta si
+            <code>build-test</code> terminó con éxito.
+          </li>
+          <li>
+            No se acepta implementar la estrategia de despliegue ni los
+            componentes adicionales sobre un pipeline base que no despliega o
+            cuya imagen no se publica correctamente.
+          </li>
+          <li>
+            La elección de estrategia (Blue-Green o Canary) debe quedar
+            justificada por escrito en el informe de la Parte II — no basta con
+            implementarla sin justificar.
+          </li>
+          <li>
+            No se pide usar Argo Rollouts ni ninguna herramienta adicional para
+            la estrategia de despliegue — el efecto debe lograrse con los
+            recursos nativos de Kubernetes (Deployment + Service).
+          </li>
+          <li>
+            Cada componente adicional que se realice (obligatorio o extra) debe
+            estar documentado en el README con los comandos exactos para
+            reproducirlo.
+          </li>
+        </ul>
+        <p><strong>Entregables</strong></p>
+        <ul>
+          <li>
+            <code>Dockerfile</code>, <code>.github/workflows/ci-cd.yml</code>,
+            <code>k8s/deployment.yaml</code>, <code>k8s/service.yaml</code>, y
+            los manifiestos de la estrategia de despliegue elegida.
+          </li>
+          <li>
+            Evidencia de cada etapa: build local exitoso, pipeline en verde en
+            Actions, imagen publicada en <code>ghcr.io</code>, rollout exitoso
+            en Minikube, y corte o reparto de tráfico de la estrategia elegida.
+          </li>
+          <li>
+            Código y manifiestos de al menos dos de los tres componentes
+            adicionales (y del tercero, si también se realizó), con su evidencia
+            de que funciona.
+          </li>
+          <li>
+            README actualizado con los comandos exactos para reproducir todo lo
+            anterior.
+          </li>
+        </ul>
+        <hr />
+        <h3>Parte II — Pruebas y el Informe</h3>
+        <p>
+          <strong>Objetivo</strong><br />Verificar con evidencia reproducible
+          que todo lo construido en la Parte I funciona, calcular las propias
+          métricas DORA a partir del trabajo realizado, y consolidar todo en un
+          informe de reflexión.
+        </p>
+        <p><strong>Instrucciones — verificación</strong></p>
+        <p>
+          <strong>Paso 1.</strong> Organice toda la evidencia recolectada en la
+          Parte I (salidas de comandos, no solo descripciones) de forma que un
+          tercero pueda seguir el README y reproducir cada demostración sin
+          ayuda adicional.
+        </p>
+        <p><strong>Instrucciones — métricas propias</strong></p>
+        <p>
+          <strong>Paso 2.</strong> Calcule el
+          <strong>lead time for changes</strong>: el tiempo entre el commit de
+          un cambio y el momento en que ese cambio quedó corriendo en el clúster
+          (no solo publicado en <code>ghcr.io</code> — hasta el
+          <code>kubectl set image</code> real). Repórtelo para al menos dos
+          cambios distintos desplegados durante esta tarea.
+        </p>
+        <p>
+          <strong>Paso 3.</strong> Calcule la
+          <strong>frecuencia de despliegue</strong>: cuántas veces se promovió
+          un cambio al Deployment (<code>kubectl set image</code> o equivalente)
+          durante el desarrollo de esta tarea, y en cuántos días.
+        </p>
+        <p>
+          <strong>Paso 4.</strong> Calcule el
+          <strong>change failure rate</strong> simplificado: de todos los
+          despliegues realizados durante esta tarea (incluyendo los de prueba y
+          error mientras se armaba la estrategia de despliegue y los componentes
+          adicionales), qué porcentaje requirió un rollback o una corrección
+          posterior.
+        </p>
+        <p>
+          <strong>Paso 5.</strong> Redacte un documento de reflexión corto (PDF,
+          1 a 2 páginas) que incluya: la justificación de la estrategia de
+          despliegue elegida en la Parte I, la observación sobre qué pasó con
+          los datos del catálogo al recrear el pod (Parte I), y cualquier
+          problema real encontrado durante la tarea y cómo se resolvió.
+        </p>
+        <p><strong>Restricciones</strong></p>
+        <ul>
+          <li>
+            Las métricas deben calcularse con datos propios y verificables
+            (timestamps de commits y de runs de Actions), no con estimaciones
+            aproximadas.
+          </li>
+          <li>
+            Encontrar y documentar un error real se evalúa positivamente, no
+            negativamente: vale más que una entrega que "simplemente funcionó a
+            la primera" sin evidencia de haberlo intentado.
+          </li>
+        </ul>
+        <p><strong>Entregables</strong></p>
+        <ul>
+          <li>
+            Enlace a su repositorio de GitHub (público), con todo el código de
+            la Parte I y el README actualizado.
+          </li>
+          <li>
+            Documento de reflexión en PDF con los tres números de DORA, la
+            justificación de la estrategia elegida, la observación sobre
+            persistencia de datos, y los problemas reales encontrados.
+          </li>
+        </ul>
+        <hr />
+        <h3>Rúbrica de Calificación</h3>
+        <p>
+          La calificación se distribuye en dos bloques de distinto peso. El
+          primero evalúa la implementación y la evidencia de ejecución real —lo
+          que la pareja construyó y demostró que funciona—, y el segundo evalúa
+          la justificación técnica y la documentación. El primer bloque pesa más
+          porque el foco de esta tarea es experimentar sobre infraestructura
+          real, no solo analizarla en papel.
+        </p>
+        <p>
+          <strong
+            >Bloque A — Parte I: Construcción y Despliegue (70 puntos)</strong
+          >
+        </p>
+        <table
+          style="width: 99.9768%"
+          border="1"
+          cellspacing="0"
+          cellpadding="6"
+        >
+          <thead>
+            <tr>
+              <th style="width: 29.3649%">Dimensión</th>
+              <th style="width: 57.0137%">Criterio</th>
+              <th style="width: 13.729%">Puntaje</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="width: 29.3649%">
+                Pipeline base construido desde cero
+              </td>
+              <td style="width: 57.0137%">
+                Dockerfile multi-stage, workflow de CI/CD funcional publicando
+                en <code>ghcr.io</code>, y Deployment + Service con rolling
+                update, todo construido sin plantillas y desplegado
+                correctamente sobre el clúster real.
+              </td>
+              <td style="width: 13.729%">25 pts</td>
+            </tr>
+            <tr>
+              <td style="width: 29.3649%">Segunda estrategia de despliegue</td>
+              <td style="width: 57.0137%">
+                Blue-Green o Canary está correctamente implementada sobre el
+                clúster real, con evidencia clara del corte o reparto de
+                tráfico.
+              </td>
+              <td style="width: 13.729%">25 pts</td>
+            </tr>
+            <tr>
+              <td style="width: 29.3649%">
+                Componentes adicionales obligatorios (2 de 3)
+              </td>
+              <td style="width: 57.0137%">
+                Al menos dos de los tres componentes (manejo de secretos,
+                escaneo de seguridad en CI, readiness con arranque lento) están
+                correctamente implementados y funcionando, con evidencia real,
+                sin importar cuáles dos haya elegido la pareja.
+              </td>
+              <td style="width: 13.729%">20 pts</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          <strong>Bloque B — Parte II: Pruebas y el Informe (30 puntos)</strong>
+        </p>
+        <table
+          style="width: 99.9768%"
+          border="1"
+          cellspacing="0"
+          cellpadding="6"
+        >
+          <thead>
+            <tr>
+              <th style="width: 28.2208%">Dimensión</th>
+              <th style="width: 58.1577%">Criterio</th>
+              <th style="width: 13.729%">Puntaje</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="width: 28.2208%">
+                Justificación de la estrategia elegida
+              </td>
+              <td style="width: 58.1577%">
+                La elección entre Blue-Green y Canary está argumentada
+                técnicamente para el caso específico de esta aplicación, no con
+                generalidades.
+              </td>
+              <td style="width: 13.729%">10 pts</td>
+            </tr>
+            <tr>
+              <td style="width: 28.2208%">Métricas propias</td>
+              <td style="width: 58.1577%">
+                Los tres números (lead time, frecuencia, change failure rate)
+                están calculados correctamente a partir de datos propios, con
+                una reflexión que los conecta con la tabla de niveles vista en
+                clase.
+              </td>
+              <td style="width: 13.729%">10 pts</td>
+            </tr>
+            <tr>
+              <td style="width: 28.2208%">Documentación y claridad general</td>
+              <td style="width: 58.1577%">
+                El README y el documento de reflexión están redactados con
+                claridad, permiten reproducir el trabajo por un tercero, y
+                conectan explícitamente con los conceptos de la clase.
+              </td>
+              <td style="width: 13.729%">10 pts</td>
+            </tr>
+          </tbody>
+        </table>
+        <p></p>
+      </div>
+      <div id="assign_files_tree6a68d017a60541">
+        <div class="ygtvitem" id="ygtv0">
+          <div class="ygtvchildren" id="ygtvc0">
+            <div class="ygtvitem" id="ygtv1">
+              <table
+                id="ygtvtableel1"
+                border="0"
+                cellpadding="0"
+                cellspacing="0"
+                class="ygtvtable ygtvdepth0 ygtv-expanded ygtv-highlight0"
+              >
+                <tbody id="yui_3_18_1_1_1785253912110_118">
+                  <tr class="ygtvrow" id="yui_3_18_1_1_1785253912110_117">
+                    <td class="ygtvcell ygtvln">
+                      <div class="ygtvspacer"></div>
+                    </td>
+                    <td
+                      id="ygtvcontentel1"
+                      class="ygtvcell ygtvhtml ygtvcontent"
+                    >
+                      <div id="yui_3_18_1_1_1785253912110_116">
+                        <div
+                          class="fileuploadsubmission"
+                          id="yui_3_18_1_1_1785253912110_115"
+                        >
+                          <img
+                            class="icon icon"
+                            alt="inventario-app.zip"
+                            title="inventario-app.zip"
+                            src="https://avac.ups.edu.ec/grado68/theme/image.php/taketops/core/1775772673/f/archive"
+                          />
+                          <a
+                            target="_blank"
+                            href="https://avac.ups.edu.ec/grado68/pluginfile.php/367873/mod_assign/introattachment/0/inventario-app.zip?forcedownload=1"
+                            id="yui_3_18_1_1_1785253912110_114"
+                            >inventario-app.zip</a
+                          >
+                        </div>
+                        <div class="fileuploadsubmissiontime">
+                          21 de julio de 2026, 17:59
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="ygtvchildren" id="ygtvc1" style="display: none"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div role="main">
+  <div class="ai-course-summarise-controls pt-3 pb-3">
+    <button
+      class="btn btn-outline-secondary"
+      aria-controls="ai-drawer"
+      type="button"
+      data-action="course-summarise"
+      data-toggle="tooltip"
+      data-html="true"
+      data-delay="200"
+      title="Crear un resumen generado por IA del contenido de la página"
+    >
+      <span class="ai-course-summarise-sparkles-icon">
+        <img
+          class="icon"
+          alt=""
+          aria-hidden="true"
+          src="https://avac.ups.edu.ec/grado68/theme/image.php/taketops/aiplacement_courseassist/1775772673/sparkles"
+        />
+      </span>
+      <span class="ai-course-summarise-sparkles-icon white">
+        <img
+          class="icon"
+          alt=""
+          aria-hidden="true"
+          src="https://avac.ups.edu.ec/grado68/theme/image.php/taketops/aiplacement_courseassist/1775772673/sparkles-white"
+        />
+      </span>
+      Resumir
+    </button>
+    <span
+      class="sr-only sr-only-focusable"
+      data-region="jumpto"
+      tabindex="-1"
+    ></span>
+  </div>
+  <div class="container-fluid mb-4">
+    <div class="row">
+      <div class="col-xs-6 me-3">
+        <div class="singlebutton">
+          <form
+            method="get"
+            action="https://avac.ups.edu.ec/grado68/mod/assign/view.php"
+          >
+            <input type="hidden" name="id" value="241650" />
+            <input type="hidden" name="action" value="editsubmission" />
+            <button
+              type="submit"
+              class="btn btn-primary"
+              id="single_button6a68d017a60548"
+            >
+              Agregar entrega
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="submissionstatustable">
+    <h3>Estado de la entrega</h3>
+    <div class="box py-3 boxaligncenter submissionsummarytable">
+      <div class="table-responsive">
+        <table class="generaltable table-bordered">
+          <tbody>
+            <tr class="">
+              <th class="cell c0" style="" scope="row">Estado de la entrega</th>
+              <td class="cell c1 lastcol" style="">
+                Todavía no se han realizado envíos
+              </td>
+            </tr>
+            <tr class="">
+              <th class="cell c0" style="" scope="row">
+                Estado de la calificación
+              </th>
+              <td class="submissionnotgraded cell c1 lastcol" style="">
+                Sin calificar
+              </td>
+            </tr>
+            <tr class="">
+              <th class="cell c0" style="" scope="row">Tiempo restante</th>
+              <td class="overdue cell c1 lastcol" style="">
+                La Tarea está retrasada por: 1 día 10 horas
+              </td>
+            </tr>
+            <tr class="lastrow">
+              <th class="cell c0" style="" scope="row">Última modificación</th>
+              <td class="cell c1 lastcol" style="">-</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="ai-drawer" id="ai-drawer" tabindex="-1">
+    <div class="ai-drawer-header">
+      <button
+        id="ai-drawer-close"
+        class="btn ai-drawer-button"
+        type="button"
+        data-action="course-summarise"
+      >
+        <i class="icon fa fa-xmark fa-fw" aria-hidden="true"></i>
+        <span class="sr-only">Cerrar caja</span>
+      </button>
+    </div>
+    <div class="ai-drawer-body" data-hasdata="0" data-cancelled="0"></div>
+  </div>
+</div>

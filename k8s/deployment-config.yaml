@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: inventario-app-config
+  labels:
+    app: inventario-app
+data:
+  APP_VERSION: "v1"
+  APP_COLOR: "blue"
+  STARTUP_DELAY_SECONDS: "0"
+  PORT: "3000"
+  SIMULATE_FAILURE: "false"

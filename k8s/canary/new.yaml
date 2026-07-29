@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventario-app-canary
+  labels:
+    app: inventario-app
+    track: canary
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inventario-app
+      track: canary
+  template:
+    metadata:
+      labels:
+        app: inventario-app
+        track: canary
+    spec:
+      containers:
+      - name: inventario-app
+        image: ghcr.io/TU_USUARIO/inventario-app:v2
+        ports:
+        - containerPort: 3000
+        env:
+        - name: APP_VERSION
+          value: "v2"
+        - name: APP_COLOR
+          value: "green"
+        - name: PORT
+          value: "3000"
+        - name: STARTUP_DELAY_SECONDS
+          value: "0"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 15
+          periodSeconds: 20
