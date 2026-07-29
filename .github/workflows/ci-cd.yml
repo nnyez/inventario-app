@@ -62,8 +62,6 @@ jobs:
           context: ./inventario-app
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
       - name: Security scan with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
