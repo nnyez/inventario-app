@@ -1,0 +1,340 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{float}
+
+\geometry{top=2.5cm,bottom=2.5cm,left=2.5cm,right=2.5cm}
+
+\definecolor{codegray}{gray}{0.9}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{codegray},
+  frame=single,
+  breaklines=true,
+  numbers=left,
+  numberstyle=\tiny
+}
+
+\hypersetup{colorlinks=true,urlcolor=blue,linkcolor=black}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{Examen Final -- Práctica CI/CD}
+\fancyhead[R]{\thepage}
+\fancyfoot[C]{Universidad Politécnica Salesiana}
+
+\begin{document}
+
+\begin{titlepage}
+  \centering
+  \vspace*{2cm}
+  {\Huge\bfseries Examen Final --- Parte 1\\}
+  {\LARGE Práctica CI/CD\\}
+  \vspace{1cm}
+  {\Large Informe de Reflexión\\}
+  \vspace{2cm}
+  {\large\textbf{Estudiante:} nnyez\\}
+  {\large\textbf{Materia:} Sistemas Operativos\\}
+  {\large\textbf{Fecha:} 29 de julio de 2026\\}
+  \vfill
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{Parte I --- Construcción y Despliegue}
+
+\subsection{Pipeline Base (Docker + CI/CD + Kubernetes)}
+
+\subsubsection{Dockerfile Multi-Stage}
+
+El \texttt{Dockerfile} consta de dos etapas:
+
+\begin{description}
+  \item[builder:] Imagen \texttt{node:18-alpine3.21}. Instala dependencias con \texttt{npm ci} y ejecuta \texttt{npm test}. Si los tests fallan, el build falla.
+  \item[runtime:] Imagen \texttt{node:18-alpine3.21} mínima. Ejecuta \texttt{apk --no-cache upgrade}, elimina npm (no necesario en runtime), y copia solo \texttt{node\_modules/, public/, db.js, server.js, data/}.
+\end{description}
+
+Para construir y probar localmente:
+
+\begin{lstlisting}
+docker build -t inventario-app ./inventario-app
+docker run -d -p 3000:3000 --name inventario inventario-app
+curl localhost:3000/health       # {"status":"ok"}
+curl localhost:3000/version      # {"version":"v1","color":"blue"}
+curl localhost:3000/api/products # Lista de 3 productos seed
+docker stop inventario && docker rm inventario
+\end{lstlisting}
+
+\subsubsection{Pipeline CI/CD (GitHub Actions)}
+
+El archivo \texttt{.github/workflows/ci-cd.yml} define dos jobs encadenados:
+
+\begin{itemize}
+  \item \textbf{build-test:} \texttt{npm ci} + \texttt{npm test} en Node.js 18.
+  \item \textbf{build-push (needs: build-test):} Construye y publica la imagen en \texttt{ghcr.io} con tags \texttt{sha-xxxxxx} y \texttt{latest}.
+\end{itemize}
+
+Incluye además escaneo de seguridad con Trivy (\texttt{aquasecurity/trivy-action@v0.36.0}) que falla el pipeline si encuentra vulnerabilidades CRITICAL.
+
+El pipeline corre exitosamente y publica la imagen en \texttt{ghcr.io/nnyez/inventario-app}.
+
+\subsubsection{Despliegue en Minikube (RollingUpdate)}
+
+Se creó el namespace \texttt{inventario-app} y se aplicaron los manifiestos:
+
+\begin{lstlisting}
+kubectl create namespace inventario-app
+kubectl apply -f k8s/deployment-config.yaml -n inventario-app
+kubectl apply -f k8s/service.yaml -n inventario-app
+kubectl apply -f k8s/deployment.yaml -n inventario-app
+\end{lstlisting}
+
+El \texttt{deployment.yaml} configura:
+\begin{itemize}
+  \item 2 réplicas.
+  \item \texttt{RollingUpdate} con \texttt{maxUnavailable: 1} y \texttt{maxSurge: 1}.
+  \item \texttt{readinessProbe}: \texttt{/health}, \texttt{initialDelaySeconds: 5}, \texttt{periodSeconds: 10}, \texttt{failureThreshold: 6}.
+  \item \texttt{livenessProbe}: \texttt{/health}, \texttt{initialDelaySeconds: 15}, \texttt{periodSeconds: 20}.
+  \item \texttt{secretKeyRef} para cargar \texttt{API\_KEY} desde el Secret.
+\end{itemize}
+
+Verificación exitosa:
+
+\begin{lstlisting}
+kubectl rollout status deployment/inventario-app -n inventario-app
+kubectl port-forward -n inventario-app service/inventario-app 8080:80
+curl localhost:8080/health       # {"status":"ok"}
+curl localhost:8080/version      # {"version":"v1","color":"blue"}
+curl localhost:8080/api/products # 3 productos seed
+\end{lstlisting}
+
+\subsection{Segunda Estrategia de Despliegue: Canary}
+
+\subsubsection{Justificación de la elección}
+
+Se eligió \textbf{Canary} sobre Blue-Green por las siguientes razones:
+
+\begin{itemize}
+  \item \textbf{Proporcionalidad nativa de Services:} Kubernetes distribuye el tráfico proporcional a la cantidad de pods que coinciden con el selector. Con 4 réplicas estables y 1 canary, el $\sim80\%$ del tráfico va a la versión estable y $\sim20\%$ a la nueva.
+  \item \textbf{Riesgo mínimo:} Un error en la nueva versión afecta solo al $\sim20\%$ de los usuarios.
+  \item \textbf{Eficiencia:} Canary requiere solo 1 réplica extra (5 pods) frente a 8 pods de Blue-Green.
+  \item \textbf{Rollback inmediato:} Basta con escalar el canary a 0 réplicas.
+\end{itemize}
+
+\subsubsection{Implementación}
+
+Manifiestos en \texttt{k8s/canary/}:
+
+\begin{itemize}
+  \item \texttt{stable.yaml}: 4 réplicas, \texttt{APP\_VERSION=v1}, \texttt{APP\_COLOR=blue}.
+  \item \texttt{new.yaml}: 1 réplica, \texttt{APP\_VERSION=v2}, \texttt{APP\_COLOR=green}.
+  \item \texttt{service.yaml}: Selector \texttt{app: inventario-app} (balancea entre ambos).
+\end{itemize}
+
+\subsubsection{Demostración de reparto de tráfico}
+
+Se ejecutaron 30 peticiones desde dentro del clúster:
+
+\begin{lstlisting}
+kubectl run test --image=alpine/curl:latest --rm -it --restart=Never -- /bin/sh -c '
+  for i in $(seq 1 30); do wget -qO- http://inventario-app/version; echo ""; done
+'
+\end{lstlisting}
+
+Resultado: ~29 respuestas \texttt{blue (v1)} y ~1 respuesta \texttt{green (v2)}, confirmando la distribución proporcional.
+
+\subsection{Componentes Adicionales de Buenas Prácticas}
+
+Se implementaron los tres componentes (2 obligatorios + 1 extra):
+
+\subsubsection{Componente 1: Manejo de Secretos}
+
+Se creó un Secret de Kubernetes con una \texttt{API\_KEY} ficticia:
+
+\begin{lstlisting}
+kubectl create secret generic inventario-app-secrets -n inventario-app \
+  --from-literal=API_KEY="sk-test-1234567890"
+\end{lstlisting}
+
+El \texttt{deployment.yaml} lo consume vía \texttt{secretKeyRef}:
+
+\begin{lstlisting}
+env:
+- name: API_KEY
+  valueFrom:
+    secretKeyRef:
+      name: inventario-app-secrets
+      key: API_KEY
+\end{lstlisting}
+
+La credencial \textbf{no está versionada en Git} (el \texttt{.gitignore} excluye datos sensibles y los comandos de creación están documentados con un placeholder).
+
+\subsubsection{Componente 2: Escaneo de Seguridad con Trivy}
+
+El pipeline incluye Trivy que escanea la imagen después de publicarla y falla si encuentra vulnerabilidades CRITICAL:
+
+\begin{lstlisting}
+- name: Security scan with Trivy
+  uses: aquasecurity/trivy-action@v0.36.0
+  with:
+    image-ref: ghcr.io/nnyez/inventario-app:latest
+    exit-code: '1'
+    severity: CRITICAL
+\end{lstlisting}
+
+Durante el desarrollo, Trivy detectó 2 CRITICALs (\texttt{CVE-2026-31789} en OpenSSL y \texttt{CVE-2026-59873} en tar), que fueron corregidas actualizando la imagen base a \texttt{node:18-alpine3.21} y eliminando npm del runtime.
+
+\subsubsection{Componente 3: Readiness con Arranque Lento}
+
+La aplicación soporta la variable \texttt{STARTUP\_DELAY\_SECONDS}. Cuando está activa, \texttt{/health} responde 503 durante los primeros N segundos:
+
+\begin{lstlisting}
+// server.js
+const STARTUP_DELAY_SECONDS = parseInt(process.env.STARTUP_DELAY_SECONDS || '0', 10);
+if (STARTUP_DELAY_SECONDS > 0) {
+  const elapsed = (Date.now() - serverStartTime) / 1000;
+  if (elapsed < STARTUP_DELAY_SECONDS) {
+    return res.status(503).json({ status: 'starting', message: 'Arrancando...' });
+  }
+}
+\end{lstlisting}
+
+Se activó en el ConfigMap (\texttt{STARTUP\_DELAY\_SECONDS: "15"}) y se verificó que el \texttt{readinessProbe} tolera el retraso (\texttt{initialDelaySeconds: 5}, \texttt{periodSeconds: 10}, \texttt{failureThreshold: 6} $\Rightarrow$ hasta 60s de tolerancia). Los eventos de Kubernetes confirmaron:
+
+\begin{lstlisting}
+30s  Warning  Unhealthy  Readiness probe failed: HTTP probe failed with statuscode: 503
+\end{lstlisting}
+
+Tras 15 segundos, el pod se marcó como Ready.
+
+\textbf{¿Qué pasaría si en vez de ajustar el probe se aumenta el número de réplicas?} Aumentar réplicas no resuelve el problema: cada pod individualmente tarda en arrancar, y sin un \texttt{readinessProbe} tolerante, Kubernetes mataría y recrearía el pod en un ciclo infinito (CrashLoopBackOff) porque nunca se marca como ``Ready''.
+
+\subsection{Observación sobre Persistencia de Datos}
+
+Se creó un producto vía API:
+
+\begin{lstlisting}
+curl -X POST localhost:8080/api/products \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Producto nuevo","sku":"NEW-001","stock":5,"price":99.99}'
+\end{lstlisting}
+
+Luego se forzó la eliminación de un pod:
+
+\begin{lstlisting}
+kubectl delete pod -n inventario-app -l app=inventario-app --limit=1
+kubectl rollout status deployment/inventario-app -n inventario-app
+\end{lstlisting}
+
+Tras la recreación, el catálogo contenía solo 3 productos (los seed originales). El producto nuevo desapareció.
+
+\textbf{Causa:} La base de datos es un archivo JSON local (\texttt{data/products.json}) en el filesystem efímero del pod. Al recrearse el pod, se usa la imagen original que contiene solo los 3 productos seed. No hay volumen persistente (PVC) ni base de datos externa.
+
+\textbf{Conclusión:} Es el comportamiento esperado. Para entornos productivos se necesitaría un PVC o una base de datos externa.
+
+\newpage
+\section{Parte II --- Métricas DORA}
+
+\subsection{Lead Time for Changes}
+
+Tiempo entre el commit y su despliegue en el clúster:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Cambio} & \textbf{Commit} & \textbf{Despliegue} & \textbf{Lead Time} \\
+\midrule
+Pipeline base & 2026-07-29 04:26 & 2026-07-29 04:35 & $\sim$9 min \\
+Canary + Secret & 2026-07-29 05:06 & 2026-07-29 05:07 & $\sim$1 min \\
+STARTUP\_DELAY & 2026-07-29 05:07 & 2026-07-29 05:08 & $\sim$1 min \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Deployment Frequency}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lr}
+\toprule
+\textbf{Métrica} & \textbf{Valor} \\
+\midrule
+Total pipelines ejecutados & 10 \\
+Pipelines exitosos & 5 \\
+Días de trabajo & 1 (2026-07-29) \\
+Frecuencia & 10 deploys/día \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Change Failure Rate (CFR)}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lr}
+\toprule
+\textbf{Métrica} & \textbf{Valor} \\
+\midrule
+Total despliegues & 10 \\
+Fallos que requirieron corrección & 5 \\
+Tasa de fallo & 50\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Reflexión sobre las Métricas}
+
+La alta tasa de fallo (50\%) refleja la etapa inicial de configuración del pipeline, donde se corrigieron problemas de autenticación, versión de acciones, caché de Docker y vulnerabilidades de seguridad.
+
+Según la tabla de niveles DORA:
+\begin{itemize}
+  \item \textbf{CFR 50\%} $\rightarrow$ Nivel \textbf{Bajo (Low)}.
+  \item \textbf{Frecuencia 10 deploys/día} $\rightarrow$ Nivel \textbf{Alto (High)}.
+  \item \textbf{Lead Time $\sim$1-9 min} $\rightarrow$ Nivel \textbf{Élite (Elite)}.
+\end{itemize}
+
+Con un pipeline maduro y estable, se espera reducir el CFR por debajo del 15\% (nivel Alto).
+
+\newpage
+\section{Problemas Reales Encontrados}
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{p{3.5cm}p{4.5cm}X}
+\toprule
+\textbf{Problema} & \textbf{Causa} & \textbf{Solución} \\
+\midrule
+Pipeline fallaba en \texttt{build-push} & \texttt{trivy-action@0.28.0} no existe & Cambiar a \texttt{@v0.36.0} \\
+Build fallaba por caché & \texttt{cache-to=type=gha} incompatible con driver docker & Eliminar caché \\
+Error ``denied: installation not allowed'' & \texttt{GITHUB\_TOKEN} sin \texttt{packages:write} & Agregar \texttt{permissions} al workflow \\
+Trivy encontraba CRITICALs & \texttt{node:18-alpine} con OpenSSL y tar obsoletos & Actualizar a \texttt{18-alpine3.21}, \texttt{apk upgrade}, eliminar npm \\
+Pods no arrancaban & Secret \texttt{inventario-app-secrets} no existía & \texttt{kubectl create secret} \\
+Service no balanceaba con port-forward & \texttt{port-forward} no distribuye tráfico entre pods & Probar desde dentro del clúster \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Conclusiones}
+
+\begin{enumerate}
+  \item Se construyó exitosamente un pipeline de CI/CD completo con Docker multi-stage, GitHub Actions, y despliegue Kubernetes en Minikube.
+  \item Se implementó la estrategia Canary para despliegues graduales, aprovechando la proporcionalidad nativa de los Services de Kubernetes.
+  \item Se incorporaron tres componentes de buenas prácticas: manejo de secretos, escaneo de seguridad con Trivy, y readiness con arranque lento.
+  \item Se verificó que la base de datos JSON local no persiste entre recreaciones de pod, comportamiento esperado sin PVC.
+  \item Se calcularon métricas DORA propias: lead time $\sim$1-9\,min, frecuencia 10 deploys/día, CFR 50\%.
+  \item Se documentaron 6 problemas reales encontrados y sus soluciones, demostrando el proceso de aprendizaje práctico.
+\end{enumerate}
+
+\end{document}
